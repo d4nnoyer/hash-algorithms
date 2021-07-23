@@ -16,7 +16,7 @@
 
 #define POSIX 	(uint32_t)0x04C11DB7
 #define XFER 	(uint32_t)0x000000AF
-#define CRC_32	(uint32_t)0x04C11DB7 //default crc32, for example, used by 7z
+#define CRC_32	(uint32_t)0x04C11DB7 //default crc32, for example, used by 7-zip
 
 
 uint8_t CRC8;
