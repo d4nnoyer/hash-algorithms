@@ -1,9 +1,12 @@
-#include <iostream>
 #include "crc.h"
 #include "hexdump.h"
+#include "timer.h"
 
 
 int main(int argc, char const *argv[]) {
+
+	Timer timer;
+
 
 	if (argc < 2)
 	{
@@ -14,9 +17,8 @@ int main(int argc, char const *argv[]) {
 	}
 	else 
 	{
-		for (int n = 1; n < argc; n++){
-			std::cout << "CRC32 of " << argv[n] << " is: " << fileCRC(argv[ n ], CRC32, CRC_32, ONES32, ONES32, true, true ) << std::endl;
-		}
+		
+		std::cout << "CRC32 of " << argv[1] << " is: " << fileCRC(argv[1], CRC32, CRC_32, ONES32, ONES32, true, true ) << std::endl;
 	}
 	
 	// hexDump();
