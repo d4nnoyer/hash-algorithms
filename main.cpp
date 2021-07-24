@@ -5,9 +5,6 @@
 
 int main(int argc, char const *argv[]) {
 
-	Timer timer;
-
-
 	if (argc < 2)
 	{
 		std::cout << "Enter message: ";
@@ -17,7 +14,7 @@ int main(int argc, char const *argv[]) {
 	}
 	else 
 	{
-		
+		Timer _;	
 		std::cout << "CRC32 of " << argv[1] << " is: " << fileCRC(argv[1], CRC32, CRC_32, ONES32, ONES32, true, true ) << std::endl;
 	}
 	
