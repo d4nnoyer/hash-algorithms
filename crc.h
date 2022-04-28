@@ -3,9 +3,7 @@
 #include <iomanip>
 #include <vector>
 #include "init.h"
-
-
-
+#include "./info/crc_info.h"
 
 template<typename T>
 T reflect(T value)
@@ -18,56 +16,143 @@ T reflect(T value)
 }
 
 template<typename T>
-void stringCRC( const std::string &FILE, 
+T leftBitShift(T &value)
+{
+	return value <<= 1;
+}
+
+template<typename T>
+T rightBitShift(T &value)
+{
+	return value >>= 1;
+}
+
+template<typename T>
+std::string numericToHexString(T number)
+{
+	std::stringstream stream;
+	stream << "0x" <<  std::uppercase << std::hex <<  number;
+
+	return stream.str();	
+}
+
+template<typename T>
+T getMessageCRC( const std::string &FILE, 
 				T crc,  
-				T POLY, 
+				T POLYNOME, 
 				const int INIT, 
-				const int XOROUT, 
-				const bool refIn, 
-				const bool refOut)
+				const T XOROUT, 
+				const bool isInputReflected, 
+				const bool isOutputReflected)
 {
 	const uint8_t OFFSET = (sizeof(T)*8 - 8);		//Calculate offset, needed to compare MSB of checksum and current bit of data
 	const T MSB = (ZERO | 1) << (sizeof(T)*8 - 1); 	//Turn most significant bit to 1, all other to 0
 	crc = INIT;
 
-	if(refIn){
-		POLY = reflect(POLY);
+	if (isInputReflected)
+		POLYNOME = reflect(POLYNOME);
+
+	if(isInputReflected){
+
 		for (size_t pos = 0; pos < FILE.size(); pos++)
 		{
 			uint8_t byte = FILE[pos];
-			for (uint8_t i = 0; i < 8; ++i, byte >>= 1) {
-				(crc & 1) ^ (byte & 1) ?  crc = (crc >> 1) ^ POLY : crc >>= 1;
+			for (uint8_t i = 0; i < 8; ++i, rightBitShift(byte)) {
+				(crc & 1) ^ (byte & 1) 
+				?  
+				crc = rightBitShift(crc) ^ POLYNOME 
+				: 
+				rightBitShift(crc);
 			}
-		}		
-        if (!refOut) crc = reflect(crc);
+		}	
 	}
-
 	else
 	{
 		for (size_t pos = 0; pos < FILE.size(); pos++)
 		{
 			uint8_t byte = FILE[pos];
-			for (uint8_t i = 0; i < 8; ++i, byte <<= 1) {
-				((crc & MSB) >> OFFSET) ^ (byte & 0x80) ?  crc = (crc << 1) ^ POLY : crc <<= 1;
+			for (uint8_t i = 0; i < 8; ++i, leftBitShift(byte)) {
+				((crc & MSB) >> OFFSET) ^ (byte & 0x80) 
+				?  
+				crc = leftBitShift(crc) ^ POLYNOME 
+				: 
+				leftBitShift(crc);
 			}
 		}
-		if (refOut) crc = reflect(crc);
 	}
 
-	std::cout << "0x" <<  std::uppercase << std::hex <<  (crc^XOROUT) << std::endl;
+	if (isInputReflected ^ isOutputReflected)
+		crc = reflect(crc);
+
+	return  crc^XOROUT;
 }
 
 template<typename T>
-std::string fileCRC( 	const std::string filename, 
+bool isMostSignificantBitTrue(T value,  uint8_t byte)
+{
+	uint8_t OFFSET = (sizeof(T)*8 - 8); //Calculate offset, needed to compare MSB of checksum and current bit of data
+	T MSB = (ZERO | 1) << (sizeof(T)*8 - 1); 	//Turn most significant bit to 1, all other to 0
+	return ((value & MSB) >> OFFSET) ^ (byte & 0x80); 
+}
+
+template<typename T>
+bool isLessSignificantBitTrue(T value,  uint8_t byte)
+{
+	uint8_t LSB = 0x01;
+	return (value & LSB) ^ (byte & LSB);
+}
+
+
+template<typename T>
+T getMessageCRC( const std::string &message, crc_info<T> info)
+{
+	T crc = info.init;
+
+	if (info.isInputReflected)
+		info.polynome = reflect(info.polynome);
+
+	for (size_t pos = 0; pos < message.size(); pos++)
+	{
+		uint8_t byte = message[pos];
+		
+		for (uint8_t i = 0; i < 8; ++i, info.isInputReflected ? rightBitShift(byte) : leftBitShift(byte)) 
+		{
+			if (info.isInputReflected)
+			{
+				isLessSignificantBitTrue(crc, byte)
+				?  crc = rightBitShift(crc) ^ info.polynome 
+				: rightBitShift(crc);
+			}
+			else
+			{
+				isMostSignificantBitTrue(crc, byte)
+				?  crc = leftBitShift(crc) ^ info.polynome 
+				: leftBitShift(crc);
+			}
+		}
+	}
+
+	if (info.isInputReflected ^ info.isOutputReflected)
+		crc = reflect(crc);
+
+	return  crc^ info.xorout;
+}
+
+
+
+
+
+
+
+template<typename T>
+T getFileCRC( 	const std::string filePath, 
 						T crc,  
-						T POLY, 
+						T POLYNOME, 
 						const int INIT, 
 						const int XOROUT, 
-						const bool refIn, 
-						const bool refOut)
+						const bool isInputReflected, 
+						const bool isOutputReflected)
 {
-	std::ios_base::sync_with_stdio(false);
-
 	const uint8_t OFFSET = (sizeof(T)*8 - 8);		
 	const T MSB = (ZERO | 1) << (sizeof(T)*8 - 1); 	
 	crc = INIT;
@@ -80,7 +165,6 @@ std::string fileCRC( 	const std::string filename,
     std::vector<char> buffer;
     buffer.resize(bufsize);
 
-    // char chunk[8192];
     size_t chunksize = 65536;
     std::vector<char> chunk;
     chunk.resize(chunksize);
@@ -89,13 +173,14 @@ std::string fileCRC( 	const std::string filename,
 
     fread.rdbuf()->pubsetbuf(&buffer[0], bufsize);
 
-    fread.open(filename, std::ios::in|std::ios::binary);
+    fread.open(filePath, std::ios::in|std::ios::binary);
 
-	if (!fread) return "...unknown. Failed to open " + filename;
+	if (!fread) throw  std::runtime_error("...unknown. Failed to open " + filePath);
 
+	if (isInputReflected)
+		POLYNOME = reflect(POLYNOME);
 
-	if(refIn){
-		POLY = reflect(POLY);
+	if(isInputReflected){
 
 		while (fread)
 		{
@@ -104,13 +189,12 @@ std::string fileCRC( 	const std::string filename,
 			{
 				byte = chunk[pos];
 				for ( i = 0; i < 8; ++i, byte >>= 1) {
-					(crc & 1) ^ (byte & 1) ?  crc = (crc >> 1) ^ POLY : crc >>= 1;
+					(crc & 1) ^ (byte & 1) ?  crc = (crc >> 1) ^ POLYNOME : crc >>= 1;
 				}
 			}		
-			if (!refOut) crc = reflect(crc);
+			if (!isOutputReflected) crc = reflect(crc);
 		}
 	}
-
 	else
 	{
 		while (fread)
@@ -120,15 +204,14 @@ std::string fileCRC( 	const std::string filename,
 			{
 				byte = chunk[pos];
 				for ( i = 0; i < 8; ++i, byte <<= 1) {
-					((crc & MSB) >> OFFSET) ^ (byte & 0x80) ?  crc = (crc << 1) ^ POLY : crc <<= 1;
+					((crc & MSB) >> OFFSET) ^ (byte & 0x80) ?  crc = (crc << 1) ^ POLYNOME : crc <<= 1;
 				}
 			}
-			if (refOut) crc = reflect(crc);
+			if (isOutputReflected) crc = reflect(crc);
 		}
 	}
 
-	std::stringstream stream;
-	stream << std::uppercase << std::hex  << (crc^XOROUT);
-
-	return "0x" + stream.str();	
+	return crc^XOROUT;	
 }
+
+
