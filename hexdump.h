@@ -11,6 +11,7 @@ void hexDump(const char* filename){
     std::cout << std::setfill( '0' ) << std::hex << std::uppercase;
 
     char chunk[16];
+    
     size_t addrOffset = 0;
 
     while (fread)
