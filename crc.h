@@ -8,15 +8,16 @@
 template<typename T>
 T reflect(T value)
 {
-    T reflected = 0;
+    T reflected = 0x0;
     for (int i = 0; i < (8 * sizeof(value)); ++i, value >>= 1){
         reflected = (reflected << 1) | (value & 1);
     }
+
     return reflected;
 }
 
 template<typename T>
-T leftBitShift(T &value)
+T leftBitShift(T &value) 
 {
 	return value <<= 1;
 }
@@ -36,131 +37,109 @@ std::string numericToHexString(T number)
 	return stream.str();	
 }
 
-template<typename T>
-T getMessageCRC( const std::string &FILE, 
-				T crc,  
-				T POLYNOME, 
-				const int INIT, 
-				const T XOROUT, 
-				const bool isInputReflected, 
-				const bool isOutputReflected)
-{
-	const uint8_t OFFSET = (sizeof(T)*8 - 8);		//Calculate offset, needed to compare MSB of checksum and current bit of data
-	const T MSB = (ZERO | 1) << (sizeof(T)*8 - 1); 	//Turn most significant bit to 1, all other to 0
-	crc = INIT;
-
-	if (isInputReflected)
-		POLYNOME = reflect(POLYNOME);
-
-	if(isInputReflected){
-
-		for (size_t pos = 0; pos < FILE.size(); pos++)
-		{
-			uint8_t byte = FILE[pos];
-			for (uint8_t i = 0; i < 8; ++i, rightBitShift(byte)) {
-				(crc & 1) ^ (byte & 1) 
-				?  
-				crc = rightBitShift(crc) ^ POLYNOME 
-				: 
-				rightBitShift(crc);
-			}
-		}	
-	}
-	else
-	{
-		for (size_t pos = 0; pos < FILE.size(); pos++)
-		{
-			uint8_t byte = FILE[pos];
-			for (uint8_t i = 0; i < 8; ++i, leftBitShift(byte)) {
-				((crc & MSB) >> OFFSET) ^ (byte & 0x80) 
-				?  
-				crc = leftBitShift(crc) ^ POLYNOME 
-				: 
-				leftBitShift(crc);
-			}
-		}
-	}
-
-	if (isInputReflected ^ isOutputReflected)
-		crc = reflect(crc);
-
-	return  crc^XOROUT;
-}
 
 template<typename T>
-bool isMostSignificantBitTrue(T value,  uint8_t byte)
+bool isMostSignificantBitDiffer(T value,  uint8_t byte)
 {
 	uint8_t OFFSET = (sizeof(T)*8 - 8); //Calculate offset, needed to compare MSB of checksum and current bit of data
-	T MSB = (ZERO | 1) << (sizeof(T)*8 - 1); 	//Turn most significant bit to 1, all other to 0
+	T MSB = (ZERO | 0x01) << (sizeof(T)*8 - 1); 	//Turn most significant bit to 1, all other to 0
 	return ((value & MSB) >> OFFSET) ^ (byte & 0x80); 
 }
 
 template<typename T>
-bool isLessSignificantBitTrue(T value,  uint8_t byte)
+bool isLessSignificantBitDiffer(T value,  uint8_t byte)
 {
 	uint8_t LSB = 0x01;
 	return (value & LSB) ^ (byte & LSB);
 }
 
+template<typename T>
+void updateCRCperLSB(T &crc, uint8_t byte, const T &polynome)
+{
+	if (isLessSignificantBitDiffer(crc, byte))
+	{
+		rightBitShift(crc);
+		crc ^= polynome;
+	}
+	else
+	{
+		rightBitShift(crc);
+	}
+}
 
 template<typename T>
-T getMessageCRC( const std::string &message, crc_info<T> info)
+void updateCRCperMSB(T &crc, uint8_t byte, const T &polynome)
 {
-	T crc = info.init;
-
-	if (info.isInputReflected)
-		info.polynome = reflect(info.polynome);
-
-	for (size_t pos = 0; pos < message.size(); pos++)
+	if (isMostSignificantBitDiffer(crc, byte))
 	{
-		uint8_t byte = message[pos];
-		
-		for (uint8_t i = 0; i < 8; ++i, info.isInputReflected ? rightBitShift(byte) : leftBitShift(byte)) 
-		{
-			if (info.isInputReflected)
-			{
-				isLessSignificantBitTrue(crc, byte)
-				?  crc = rightBitShift(crc) ^ info.polynome 
-				: rightBitShift(crc);
-			}
-			else
-			{
-				isMostSignificantBitTrue(crc, byte)
-				?  crc = leftBitShift(crc) ^ info.polynome 
-				: leftBitShift(crc);
-			}
-		}
+		leftBitShift(crc);
+		crc ^= polynome;
 	}
-
-	if (info.isInputReflected ^ info.isOutputReflected)
-		crc = reflect(crc);
-
-	return  crc^ info.xorout;
+	else
+	{
+		leftBitShift(crc);
+	}
 }
 
 
 
+template<typename T>
+T getCRCofStringMessage(const std::string &message, crc_info<T> crcInfo)
+{
+	std::vector<char> chunk(message.begin(), message.end());
 
+	T crc = crcInfo.init;
+
+	void (*updateCRC)(T&, uint8_t , const T&);
+
+	if (crcInfo.isInputReflected){
+		updateCRC = &updateCRCperLSB;
+		crcInfo.polynome = reflect(crcInfo.polynome);
+	}
+	else{
+		updateCRC = &updateCRCperMSB;
+	}
+
+	updateCRCperChunk(crc, chunk.size(), chunk, crcInfo, updateCRC);
+
+	crc = getFinalCrcValue(crc, crcInfo);
+	return  crc;
+}
 
 
 
 template<typename T>
-T getFileCRC( 	const std::string filePath, 
-						T crc,  
-						T POLYNOME, 
-						const int INIT, 
-						const int XOROUT, 
-						const bool isInputReflected, 
-						const bool isOutputReflected)
+T getFinalCrcValue(T &crc, const crc_info<T> &info)
 {
-	const uint8_t OFFSET = (sizeof(T)*8 - 8);		
-	const T MSB = (ZERO | 1) << (sizeof(T)*8 - 1); 	
-	crc = INIT;
+	if (info.isInputReflected ^ info.isOutputReflected)
+		crc = reflect(crc);
 
-    uint8_t i;
-    uint8_t byte;
-    size_t pos;
+	crc ^= info.xorout;
 
+	return crc;
+}
+
+
+template<typename T>
+T updateCRCperChunk(T &crc, size_t chunkSize, const std::vector<char> &chunk, const crc_info<T> &crcInfo, void (*updateCRC)(T&, uint8_t , const T&))
+{
+	for (size_t currentPosition = 0; currentPosition < chunkSize; currentPosition++)
+	{
+		uint8_t byte = chunk[currentPosition];
+		for (uint8_t i = 0; i < 8; ++i, crcInfo.isInputReflected ? rightBitShift(byte) : leftBitShift(byte)) 
+		{
+			updateCRC(crc, byte, crcInfo.polynome);
+		}
+	}
+
+	return crc;
+}
+
+
+
+template<typename T>
+T getCRCofFile(const std::string filePath, crc_info<T> crcInfo)
+{
     size_t bufsize = 1048576;
     std::vector<char> buffer;
     buffer.resize(bufsize);
@@ -170,48 +149,69 @@ T getFileCRC( 	const std::string filePath,
     chunk.resize(chunksize);
 
 	std::ifstream fread;
-
     fread.rdbuf()->pubsetbuf(&buffer[0], bufsize);
+    fread.open(filePath, std::ios::in | std::ios::binary);
 
-    fread.open(filePath, std::ios::in|std::ios::binary);
+	if (!fread) throw  std::runtime_error("Failed to open " + filePath);
 
-	if (!fread) throw  std::runtime_error("...unknown. Failed to open " + filePath);
+	T crc = crcInfo.init;
 
-	if (isInputReflected)
-		POLYNOME = reflect(POLYNOME);
+	void (*updateCRC)(T&, uint8_t byte, const T&);
 
-	if(isInputReflected){
-
-		while (fread)
-		{
-            fread.read( &chunk[0], chunksize );
-			for ( pos = 0; pos < fread.gcount(); ++pos)
-			{
-				byte = chunk[pos];
-				for ( i = 0; i < 8; ++i, byte >>= 1) {
-					(crc & 1) ^ (byte & 1) ?  crc = (crc >> 1) ^ POLYNOME : crc >>= 1;
-				}
-			}		
-			if (!isOutputReflected) crc = reflect(crc);
-		}
+	if (crcInfo.isInputReflected){
+		updateCRC = &updateCRCperLSB;
+		crcInfo.polynome = reflect(crcInfo.polynome);
 	}
-	else
+	else{
+		updateCRC = &updateCRCperMSB;
+	}
+
+	while (fread)
 	{
-		while (fread)
-		{
-            fread.read( &chunk[0], chunksize );
-			for ( pos = 0; pos < fread.gcount(); ++pos)
-			{
-				byte = chunk[pos];
-				for ( i = 0; i < 8; ++i, byte <<= 1) {
-					((crc & MSB) >> OFFSET) ^ (byte & 0x80) ?  crc = (crc << 1) ^ POLYNOME : crc <<= 1;
-				}
-			}
-			if (isOutputReflected) crc = reflect(crc);
-		}
+		fread.read( &chunk[0], chunksize );
+
+		updateCRCperChunk(crc, fread.gcount(), chunk, crcInfo, updateCRC);	
 	}
 
-	return crc^XOROUT;	
+	crc = getFinalCrcValue(crc, crcInfo);
+	return  crc;	
 }
+
+
+template<typename T>
+T getCRCofFile(std::string filePath, T POLYNOME, T INIT, T XOROUT, bool isInputReflected, bool isOutputReflected)
+{
+	crc_info<typeof(T)> info = 
+	{
+		POLYNOME, 
+		INIT, 
+		XOROUT, 
+		isInputReflected, 
+		isOutputReflected
+	};
+
+	auto crc = getCRCofFile(filePath, info);
+
+	return crc;
+}
+
+
+template<typename T>
+T getCRCofStringMessage(const std::string &FILE, T POLYNOME, T INIT, T XOROUT, bool isInputReflected, bool isOutputReflected)
+{
+	crc_info<typeof(T)> info = 
+	{
+		POLYNOME, 
+		INIT, 
+		XOROUT, 
+		isInputReflected, 
+		isOutputReflected
+	};
+
+	auto crc = getCRCofStringMessage(FILE, info);
+
+	return crc;
+}
+
 
 

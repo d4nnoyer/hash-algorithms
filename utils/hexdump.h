@@ -1,3 +1,6 @@
+#ifndef HEXDUMP_H
+#define HEXDUMP_H
+
 #include <iostream>
 #include <fstream>
 #include <iomanip>
@@ -33,3 +36,5 @@ void hexDump(const char* filename){
         cout << "\n";
     }
 }
+
+#endif /* HEXDUMP_H */

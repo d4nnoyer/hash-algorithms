@@ -368,3 +368,4 @@ src.zip
 
 icon.png
 .idea
+/cmake-build-debug/

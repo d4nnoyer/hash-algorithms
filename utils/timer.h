@@ -1,3 +1,6 @@
+#ifndef TIMER_H
+#define TIMER_H
+
 #include <iostream>
 #include <chrono>
 
@@ -24,3 +27,5 @@ public:
         cout << std::dec << "\n" << finish -start << " us.\n";
     }
 };
+
+#endif /* TIMER_H */
