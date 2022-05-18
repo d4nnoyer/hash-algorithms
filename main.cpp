@@ -1,4 +1,4 @@
-#include "crc.h"
+#include "crc/crc.h"
 #include "./utils/hexdump.h"
 #include "./utils/timer.h"
 
@@ -8,7 +8,7 @@ using std::endl;
 using std::boolalpha;
 using std::string;
 
-void printCrcTestResult(const string crcName, uint64_t value, uint64_t expectedValue)
+void printCrcTestResult(const string& crcName, uint64_t value, uint64_t expectedValue)
 {
 	cout << crcName << ": \t" << numericToHexString(value) << "\t" <<  boolalpha << (value == expectedValue) <<  endl;
 }
@@ -18,9 +18,9 @@ int main(int argc, char const *argv[]) {
 
 	if (argc < 2)
 	{
-		// std::cout << "Enter message: ";
-		string message = "message";
-		// std::cin >> message;
+        std::cout << "Enter message: ";
+		string message;
+        std::cin >> message;
 
 //		auto crc = getCRCofStringMessage(message, CRC_32_INFO);
 //		printCrcTestResult("CRC_32", crc, 0xB6BD307F);
