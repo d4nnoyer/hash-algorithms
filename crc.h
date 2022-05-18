@@ -54,7 +54,7 @@ bool isLessSignificantBitDiffer(T value,  uint8_t byte)
 }
 
 template<typename T>
-void updateCRCperLSB(T &crc, uint8_t byte, const T &polynome)
+void updateCrCperLsb(T &crc, uint8_t byte, const T &polynome)
 {
 	if (isLessSignificantBitDiffer(crc, byte))
 	{
@@ -88,13 +88,13 @@ T getCRCofStringMessage(const std::string &message, crc_info<T> crcInfo)
 {
 	std::vector<char> chunk(message.begin(), message.end());
 
-	T crc = crcInfo.init;
+	T crc = crcInfo.initial_polynomial;
 
 	void (*updateCRC)(T&, uint8_t , const T&);
 
 	if (crcInfo.isInputReflected){
-		updateCRC = &updateCRCperLSB;
-		crcInfo.polynome = reflect(crcInfo.polynome);
+		updateCRC = &updateCrCperLsb;
+		crcInfo.generating_polynomial = reflect(crcInfo.generating_polynomial);
 	}
 	else{
 		updateCRC = &updateCRCperMSB;
@@ -114,7 +114,7 @@ T getFinalCrcValue(T &crc, const crc_info<T> &info)
 	if (info.isInputReflected ^ info.isOutputReflected)
 		crc = reflect(crc);
 
-	crc ^= info.xorout;
+	crc ^= info.xorout_polynomial;
 
 	return crc;
 }
@@ -128,7 +128,7 @@ T updateCRCperChunk(T &crc, size_t chunkSize, const std::vector<char> &chunk, co
 		uint8_t byte = chunk[currentPosition];
 		for (uint8_t i = 0; i < 8; ++i, crcInfo.isInputReflected ? rightBitShift(byte) : leftBitShift(byte)) 
 		{
-			updateCRC(crc, byte, crcInfo.polynome);
+			updateCRC(crc, byte, crcInfo.generating_polynomial);
 		}
 	}
 
@@ -154,13 +154,13 @@ T getCRCofFile(const std::string filePath, crc_info<T> crcInfo)
 
 	if (!fread) throw  std::runtime_error("Failed to open " + filePath);
 
-	T crc = crcInfo.init;
+	T crc = crcInfo.initial_polynomial;
 
 	void (*updateCRC)(T&, uint8_t byte, const T&);
 
 	if (crcInfo.isInputReflected){
-		updateCRC = &updateCRCperLSB;
-		crcInfo.polynome = reflect(crcInfo.polynome);
+		updateCRC = &updateCrCperLsb;
+		crcInfo.generating_polynomial = reflect(crcInfo.generating_polynomial);
 	}
 	else{
 		updateCRC = &updateCRCperMSB;

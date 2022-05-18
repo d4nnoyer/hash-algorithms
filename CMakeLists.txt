@@ -14,4 +14,4 @@ add_executable(hash_algorithms
         utils/timer.h
         crc.h
         init.h
-        main.cpp)
+        main.cpp info/crc64_info.h)

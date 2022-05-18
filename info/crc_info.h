@@ -5,9 +5,9 @@
 template<typename T>
 struct crc_info
 {
-    T polynome;
-    T init;
-    T xorout;
+    T generating_polynomial;
+    T initial_polynomial;
+    T xorout_polynomial;
     bool isInputReflected;
     bool isOutputReflected;
 };
